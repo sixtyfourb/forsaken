@@ -41,6 +41,37 @@ const char * render_error_description( int e )
 		return NULL;
 }
 
+#ifdef __ANDROID__
+/*
+ * An extension entry point cannot be linked against - libGLESv2 exports only
+ * core - so it is resolved on first use. If a device turns up without the
+ * extension this draws nothing rather than crashing, and the fallback described
+ * in render_gl_shared.h becomes necessary.
+ */
+void fsk_draw_elements_base_vertex( GLenum mode, GLsizei count, GLenum type,
+                                    const void *indices, GLint basevertex )
+{
+	typedef void (*base_vertex_fn)( GLenum, GLsizei, GLenum, const void *, GLint );
+	static base_vertex_fn fn = NULL;
+	static int looked_up = 0;
+
+	if ( !looked_up )
+	{
+		looked_up = 1;
+		fn = (base_vertex_fn) SDL_GL_GetProcAddress( "glDrawElementsBaseVertexOES" );
+
+		if ( !fn )
+			fn = (base_vertex_fn) SDL_GL_GetProcAddress( "glDrawElementsBaseVertexEXT" );
+
+		if ( !fn )
+			DebugPrintf( "no glDrawElementsBaseVertex: geometry will not draw\n" );
+	}
+
+	if ( fn )
+		fn( mode, count, type, indices, basevertex );
+}
+#endif
+
 // poly modes
 
 #ifdef __ANDROID__

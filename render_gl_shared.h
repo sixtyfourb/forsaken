@@ -33,6 +33,27 @@
 #define GL_WRITE_ONLY   GL_WRITE_ONLY_OES
 #define glMapBuffer     glMapBufferOES
 #define glUnmapBuffer   glUnmapBufferOES
+
+/*
+ * Depth range and clear take floats in GLES rather than doubles. The call sites
+ * pass literals, so aliasing the names is enough.
+ */
+#define glClearDepth    glClearDepthf
+#define glDepthRange    glDepthRangef
+
+/*
+ * Base-vertex drawing is GL 3.2, and in GLES it arrives as an extension. Both
+ * target GPUs carry it, as they do GL_OES_mapbuffer above.
+ *
+ * The extension-free way would be to stop passing a base vertex and instead
+ * re-point every vertex attribute by startVert * stride inside the texture-group
+ * loop in render_gl2.c. That is the robust fallback if a device turns up without
+ * this, and it is more than an alias - the attributes are currently set up once,
+ * before the loop.
+ */
+void fsk_draw_elements_base_vertex( GLenum mode, GLsizei count, GLenum type,
+                                   const void *indices, GLint basevertex );
+#define glDrawElementsBaseVertex fsk_draw_elements_base_vertex
 #else
 #include "SDL_opengl.h"
 #endif
