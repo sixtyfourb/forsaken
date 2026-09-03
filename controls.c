@@ -6,6 +6,9 @@
 #include "config.h"
 #include "title.h"
 #include "controls.h"
+#ifdef __ANDROID__
+#include "android/touch_input.h"
+#endif
 #include <stdio.h>
 #include "text.h"
 #include "main.h"
@@ -932,6 +935,15 @@ void control_ship( USERCONFIG *conf, SHIPCONTROL *ctrl )
   MaxTurn = TurnAccell * MaxTurnSpeed * framelag;
   MaxRoll = RollAccell * MaxRollSpeed * framelag;
   MaxBank = BankAccell * MaxBankAngle * framelag;
+
+#ifdef __ANDROID__
+  /*
+   * Touch and gamepad input goes in here, after the maxima are known and before
+   * the clamps below, so it is bounded exactly as keyboard, mouse and joystick
+   * input already are rather than being clamped separately or not at all.
+   */
+  fsk_touch_apply_controls( ctrl, framelag );
+#endif
 
   CLAMP( ctrl->pitch, MaxTurn );
   CLAMP( ctrl->yaw, MaxTurn );

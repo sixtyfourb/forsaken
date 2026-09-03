@@ -584,6 +584,13 @@ extern void network_cleanup( void );
 extern bool SeriousError;
 extern void CleanUpAndPostQuit(void);
 
+#ifdef __ANDROID__
+/*
+ * Android has no process main(): the JNI layer calls PortableInit(), which calls
+ * this. SDL_MAIN_HANDLED keeps SDL from renaming it to SDL_main as well.
+ */
+#define main fsk_main
+#endif
 int main( int argc, char* argv[] )
 {
 	int i;
