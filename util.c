@@ -1,3 +1,4 @@
+#include <stdlib.h>   /* getenv, for the Android base path */
 #include <stdio.h>
 #include <stdarg.h>
 #include <time.h>
@@ -40,9 +41,54 @@ char* convert_path( char* _str )
 #ifdef WIN32
 	return _str;
 #else
-	static char temp[500];
-	char * str = temp;
-	strncpy( temp, _str, sizeof(temp) );
+	/*
+	 * 1024 rather than 500 because the Android branch below makes every path
+	 * longer by the length of the game folder, and a silently truncated path
+	 * fails in ways that are very hard to read back from.
+	 */
+	static char temp[1024];
+	char * str;
+	size_t used = 0;
+
+#ifdef __ANDROID__
+	/*
+	 * This engine addresses its data with relative paths and relies on the
+	 * working directory, which cannot work here: the game folder is reached
+	 * through the storage framework, and chdir() into it silently fails - the
+	 * process is left at / and every relative path looks in the wrong place.
+	 *
+	 * The framework's file layer interposes the libc calls on absolute paths, so
+	 * the fix is to make them absolute. HOME is the game folder, set by the JNI
+	 * layer before the engine starts.
+	 *
+	 * This is the one place worth doing it: every path in the engine passes
+	 * through here on its way to open, stat or opendir.
+	 */
+	if ( _str && _str[0] != '/' )
+	{
+		const char *base = getenv( "HOME" );
+
+		if ( base && *base )
+		{
+			int n = snprintf( temp, sizeof(temp), "%s/", base );
+
+			/* Only take the prefix if the rest still has room to follow it. */
+			if ( n > 0 && (size_t) n < sizeof(temp) / 2 )
+				used = (size_t) n;
+		}
+	}
+#endif
+
+	strncpy( temp + used, _str, sizeof(temp) - used - 1 );
+	temp[ sizeof(temp) - 1 ] = 0;
+
+	/*
+	 * Only the engine's own part of the path is folded to lower case. The base
+	 * must not be: the storage framework hands out paths with capitals in them
+	 * and they have to be passed back exactly as given.
+	 */
+	str = temp + used;
+
 	while (*str)
 	{
 		if (*str == '\\')
@@ -51,6 +97,7 @@ char* convert_path( char* _str )
 			*str = (char) tolower(*str);
 		str++;
 	}
+
 	return temp;
 #endif
 }
