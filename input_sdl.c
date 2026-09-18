@@ -247,11 +247,17 @@ void app_keyboard( SDL_KeyboardEvent * key )
 	}
 	if( key->type == SDL_KEYDOWN )
 	{
+#if SDL_VERSION_ATLEAST(2,0,0)
+		// SDL 2 dropped keysym.unicode - typed text arrives as SDL_TEXTINPUT
+		// instead - so the keysym is all there is at this point.
+		input_buffer_send( key->keysym.sym );
+#else
 		input_buffer_send(
 			key->keysym.unicode ? 
 				key->keysym.unicode :
 				key->keysym.sym
 		);
+#endif
 	}
 }
 
@@ -539,7 +545,7 @@ bool joysticks_init(void)
 		{
 			DebugPrintf(
 				"joysticks_init: joystick (%d), '%s' failed to open\n",
-				i, SDL_JoystickName(i)
+				i, SDL_JoystickNameForIndex(i)
 			);
 			continue;
 		}
@@ -555,7 +561,7 @@ bool joysticks_init(void)
 		// TODO
 		// JoystickInfo[i].NumBalls = SDL_JoystickNumBalls(joy);
 
-		JoystickInfo[i].Name = strdup( SDL_JoystickName(i) );
+		JoystickInfo[i].Name = strdup( SDL_JoystickNameForIndex(i) );
 
 		DebugPrintf( 
 			"joysticks_init: joystick (%d), name='%s', axises=%d, buttons=%d, hats=%d\n", 
