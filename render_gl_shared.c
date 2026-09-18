@@ -43,6 +43,16 @@ const char * render_error_description( int e )
 
 // poly modes
 
+#ifdef __ANDROID__
+/*
+ * GLES has no glPolygonMode, and no GL_LINE/GL_POINT/GL_FILL to give it. Filled
+ * is the only mode there is, so fill is what the engine already gets and the
+ * other two - which are debug views - become no-ops rather than errors.
+ */
+void render_mode_wireframe(void) {}
+void render_mode_points(void) {}
+void render_mode_fill(void) {}
+#else
 void render_mode_wireframe(void)
 {
 	glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
@@ -57,6 +67,7 @@ void render_mode_fill(void)
 {
 	glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
 }
+#endif
 
 // unused in opengl
 bool FSBeginScene(){ return true; }
@@ -226,7 +237,12 @@ bool FSCreateTexture(LPTEXTURE *texture, const char *fileName, u_int16_t *width,
 static void print_info( void )
 {
 	GLboolean b;
+#ifdef __ANDROID__
+	// No stereo buffers in GLES, and no GL_STEREO to ask about them with.
+	b = GL_FALSE;
+#else
 	glGetBooleanv(GL_STEREO,&b);
+#endif
 
 	DebugPrintf( "gl vendor='%s', renderer='%s', version='%s', shader='%s', stereo='%s'\n",
 		glGetString(GL_VENDOR),

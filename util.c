@@ -1,7 +1,11 @@
 #include <stdio.h>
 #include <stdarg.h>
 #include <time.h>
+#ifdef __ANDROID__
+#include <sys/time.h>   // bionic has no sys/timeb.h; ftime is obsolete
+#else
 #include <sys/timeb.h>
+#endif
 #include "main.h"
 #include "file.h"
 #include "util.h"
@@ -145,10 +149,17 @@ void DebugPrintf( const char * format, ... ) // timestamp prefix
 	if(!Debug)
 		return;
 
+#ifdef __ANDROID__
+	struct timeval now;
+	gettimeofday( &now, NULL );
+	sprintf( buf, "%ld.%.3d ",
+		(long) now.tv_sec, (int) ( now.tv_usec / 1000 ) );
+#else
 	struct timeb now;
 	ftime(&now);
 	sprintf( buf, "%ld.%.3d ",
 		now.time, now.millitm);
+#endif
 
 	buf2 = strchr(buf,0);
 	buf_length = sizeof(buf)-strlen(buf);
