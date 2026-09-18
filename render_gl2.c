@@ -193,10 +193,10 @@ bool draw_render_object( RENDEROBJECT *renderObject, int primitive_type, bool or
 	int loc;
 	int i;
 
-	glBindBuffer( GL_ARRAY_BUFFER, renderObject->lpVertexBuffer );
+	glBindBuffer( GL_ARRAY_BUFFER, (GLuint)(uintptr_t) renderObject->lpVertexBuffer );
 
 	if ( renderObject->lpIndexBuffer )
-		glBindBuffer( GL_ELEMENT_ARRAY_BUFFER, renderObject->lpIndexBuffer );
+		glBindBuffer( GL_ELEMENT_ARRAY_BUFFER, (GLuint)(uintptr_t) renderObject->lpIndexBuffer );
 	else
 		glBindBuffer( GL_ELEMENT_ARRAY_BUFFER, 0 );
 
@@ -219,7 +219,7 @@ bool draw_render_object( RENDEROBJECT *renderObject, int primitive_type, bool or
 				attr[i].type,
 				attr[i].normalized,
 				orthographic ? sizeof(TLVERTEX) : sizeof(LVERTEX),
-				attr[i].offset
+				(const void *)(uintptr_t) attr[i].offset
 			);
 			glEnableVertexAttribArray( loc );
 		}
@@ -230,7 +230,7 @@ bool draw_render_object( RENDEROBJECT *renderObject, int primitive_type, bool or
 	// tell it about the normal buffer
 	if ( renderObject->lpNormalBuffer )
 	{
-		glBindBuffer( GL_ARRAY_BUFFER, renderObject->lpNormalBuffer );
+		glBindBuffer( GL_ARRAY_BUFFER, (GLuint)(uintptr_t) renderObject->lpNormalBuffer );
 		loc = glGetAttribLocation( current_program, "vnormal" );
 		if (loc >= 0)
 		{
