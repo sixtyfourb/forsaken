@@ -31,8 +31,17 @@
 
 #include <stdio.h>
 #include "lua_common.h"
+// LAN play here is ENet; the Lua socket module is a dependency not worth
+// carrying. Android never has it, and a Makefile build asks for it with
+// LUASOCKET=0 - see the note by LUASOCKET there.
+#ifdef __ANDROID__
+#define NO_LUASOCKET
+#endif
+
+#ifndef NO_LUASOCKET
 #include "luasocket.h"
 #include "mime.h"
+#endif
 #include "main.h"
 
 lua_State *L1;
@@ -130,8 +139,10 @@ int luaopen_miniupnp(lua_State *L);
 
 static void assign_loaders( void )
 {
+#ifndef NO_LUASOCKET
 	assign_loader( "socket.core", luaopen_socket_core );
 	assign_loader( "mime.core", luaopen_mime_core );
+#endif
 #ifdef MINIUPNP
 	assign_loader( "miniupnp", luaopen_miniupnp );
 #endif
