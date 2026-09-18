@@ -65,6 +65,12 @@ endif
 
 # some systems use lua5.1
 LUA=$(shell pkg-config lua && echo lua || echo lua5.1)
+
+# The Lua socket module is optional. Distributions ship luasocket only for
+# their current Lua series - Ubuntu 24.04 has lua5.3-socket and lua5.4-socket
+# and nothing for the 5.1 this engine targets - and LAN play here is ENet, so a
+# build can do without it. LUASOCKET=0 drops the module and the dependency.
+LUASOCKET=1
 MACOSX=$(shell uname -a | grep -qi darwin && echo 1 || echo 0)
 
 # which version of sdl do you want to ask pkgconfig for ?
@@ -82,7 +88,14 @@ $(if $(shell test "$(GL)" -ge 3 -a "$(SDL)" -lt 2 && echo fail), \
      $(error "GL >= 3 only supported with SDL >= 2"))
 
 # library headers
-CFLAGS+= `pkg-config --cflags $(SDL_) $(LUA) $(LUA)-socket libenet libpng zlib openal`
+PKGS=$(LUA) libenet libpng zlib openal
+ifeq ($(LUASOCKET),1)
+  PKGS+= $(LUA)-socket
+else
+  CFLAGS+= -DNO_LUASOCKET
+endif
+
+CFLAGS+= `pkg-config --cflags $(SDL_) $(PKGS)`
 ifeq ($(MACOSX),1)
   CFLAGS += -DMACOSX
 endif
@@ -95,7 +108,7 @@ ifeq ($(STATIC),1)
   LIB+= -Wl,-dn
   PKG_CFG_OPTS= --static
 endif
-LIB+= `pkg-config $(PKG_CFG_OPTS) --libs $(LUA) $(LUA)-socket libenet libpng zlib openal` -lm
+LIB+= `pkg-config $(PKG_CFG_OPTS) --libs $(PKGS)` -lm
 ifeq ($(STATIC),1)
   LIB+= -Wl,-dy
 endif
@@ -192,6 +205,7 @@ check:
 	@echo "RENDER_DISABLED = $(RENDER_DISABLED)"
 	@echo "INPUT_DISABLED = $(INPUT_DISABLED)"
 	@echo "LUA = $(LUA)"
+	@echo "LUASOCKET = $(LUASOCKET)"
 	@echo "SDL = $(SDL)"
 	@echo "SDL_ = $(SDL_)"
 	@echo
