@@ -29,7 +29,14 @@
 
 local base 	= _G
 local table 	= require("table")
-local http 	= require("socket.http")
+-- socket.http is the only thing in this module that needs luasocket, and it is
+-- one GET against the master server's game list. A build without the Lua socket
+-- module - Android, and any Makefile build with LUASOCKET=0, since no
+-- distribution ships luasocket for Lua 5.1 any more - must still be able to
+-- load this file: init() requires it before anything else, so a hard require
+-- here fails the whole Lua startup and the engine never reaches its menu.
+local have_http, http = pcall(require, "socket.http")
+if not have_http then http = nil end
 local assert	= assert
 local pcall	= pcall
 local loadstring	= loadstring
@@ -40,6 +47,9 @@ local url = "http://fly.thruhere.net/status/games.json"
 
 function get( url )
 	local list = {}
+	-- No luasocket in this build: the internet game list is simply empty, and
+	-- LAN play over ENet is unaffected.
+	if not http then return list end
 	local body, code, headers = http.request(url)
 	if code ~= 200 then return list end
 	body = "return " .. body
