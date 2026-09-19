@@ -2,6 +2,7 @@
 #include "input.h"
 #include "util.h"
 #include "render.h"
+#include "title.h"   /* CurrentMenu and MenuState, for the pad in the menus */
 #include <SDL.h>
 
 JOYSTICKINFO JoystickInfo[MAX_JOYSTICKS];
@@ -382,6 +383,72 @@ static int get_deadzone( int joy, int axis )
 	return JoystickInfo[ joy ].Axis[ axis ].deadzone;
 }
 
+
+/*
+ * The pad in the menus.
+ *
+ * Menu navigation reads SDLK_* and the mouse pseudo-keys. The joystick codes
+ * this file already sends - DIK_JOYSTICK for buttons, JOYSTICK_POVDIR_KEYCODE
+ * for a hat - exist so the key-assignment screens can bind them, and every
+ * other menu ignores them. On a desktop that is invisible: there is a keyboard.
+ * On a handheld it means a pad that cannot move the cursor, so the game cannot
+ * be started by the only control the player has.
+ *
+ * Sending the matching key alongside the joystick code leaves binding alone and
+ * makes every menu navigable.
+ */
+extern MENUSTATE MenuState;
+
+static void menu_key( int key )
+{
+	/* Only while a menu is up. */
+	if ( !CurrentMenu )
+		return;
+
+	/*
+	 * Never while a screen is waiting for a button to assign: there the
+	 * joystick code is the answer being given, and a Return alongside it would
+	 * be taken as one.
+	 */
+	if ( MenuState == MENUSTATE_Keydef ||
+	     MenuState == MENUSTATE_Keydef2 ||
+	     MenuState == MENUSTATE_SelectKeydef )
+		return;
+
+	input_buffer_send( key );
+}
+
+/*
+ * A stick reports a position, a menu wants a keypress, so the key is sent when
+ * the axis crosses out of the middle and not again until it comes back. Without
+ * the edge the cursor runs the length of the menu while the stick is held.
+ */
+static void menu_key_from_axis( int which, int axis, long value )
+{
+	static signed char last[MAX_JOYSTICKS][MAX_JOYSTICK_AXIS];
+	signed char now;
+
+	if ( which >= MAX_JOYSTICKS || axis >= MAX_JOYSTICK_AXIS )
+		return;
+
+	/* Past two thirds counts as a press; anything less lets it fire again. */
+	now = ( value > 66 ) ? 1 : ( value < -66 ) ? -1 : 0;
+
+	if ( now == last[which][axis] )
+		return;
+
+	last[which][axis] = now;
+
+	if ( now == 0 )
+		return;
+
+	/* The first two axes are the left stick everywhere this runs. */
+	if ( axis == 0 )
+		menu_key( now > 0 ? SDLK_RIGHT : SDLK_LEFT );
+	else if ( axis == 1 )
+		menu_key( now > 0 ? SDLK_DOWN : SDLK_UP );
+}
+
 void app_joy_axis( SDL_JoyAxisEvent * axis )
 {
 	long value;
@@ -406,6 +473,9 @@ void app_joy_axis( SDL_JoyAxisEvent * axis )
 	// other wise no movement at all is registered
 	joy_axis_state[ axis->which ][ axis->axis ] = 
 		( abs(value) > deadzone ) ? value : 0 ;
+
+	menu_key_from_axis( axis->which, axis->axis,
+		joy_axis_state[ axis->which ][ axis->axis ] );
 }
 
 void app_joy_ball( SDL_JoyBallEvent * ball )
@@ -431,6 +501,12 @@ void app_joy_button( SDL_JoyButtonEvent * button )
 		input_buffer_send(
 			button->button + DIK_JOYSTICK
 		);
+
+		/* The bottom face button accepts, the one beside it goes back. */
+		if ( button->button == 0 )
+			menu_key( SDLK_RETURN );
+		else if ( button->button == 1 )
+			menu_key( SDLK_ESCAPE );
 	}
 }
 
@@ -464,6 +540,7 @@ void app_joy_hat( SDL_JoyHatEvent * hat )
 				JOY_HAT_UP
 			)
 		);
+		menu_key( SDLK_UP );
 	}
 	else
 	{
@@ -480,6 +557,7 @@ void app_joy_hat( SDL_JoyHatEvent * hat )
 				JOY_HAT_RIGHT
 			)
 		);
+		menu_key( SDLK_RIGHT );
 	}
 	else
 	{
@@ -496,6 +574,7 @@ void app_joy_hat( SDL_JoyHatEvent * hat )
 				JOY_HAT_DOWN
 			)
 		);
+		menu_key( SDLK_DOWN );
 	}
 	else
 	{
@@ -512,6 +591,7 @@ void app_joy_hat( SDL_JoyHatEvent * hat )
 				JOY_HAT_LEFT
 			)
 		);
+		menu_key( SDLK_LEFT );
 	}
 	else
 	{
