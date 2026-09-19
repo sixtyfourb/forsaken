@@ -268,6 +268,34 @@ static bool create_video_surface( u_int32_t window_flags, u_int32_t renderer_fla
 		return false;
 	}
 
+	/*
+	 * Lay out for the surface we were given, not the one we asked for.
+	 *
+	 * ThisMode comes from the config file, and every piece of layout in the
+	 * engine reads it: the viewport, the 2D ortho projection, the menu
+	 * coordinates. A compositor is free to hand back something else - gamescope
+	 * on a handheld sizes the surface to what the client asks of it rather than
+	 * to the panel, so a config written on a desktop arrives asking for 1920x1080
+	 * and gets whatever the session is running. When the two disagree the 3D view
+	 * still looks right and the 2D does not: menus draw into a corner and the
+	 * panels behind them cover the screen.
+	 */
+	{
+		int got_w = 0, got_h = 0;
+
+		SDL_GetWindowSize( render_info.window, &got_w, &got_h );
+
+		if ( got_w > 0 && got_h > 0 &&
+		     ( got_w != render_info.ThisMode.w || got_h != render_info.ThisMode.h ) )
+		{
+			DebugPrintf( "video: asked for %dx%d, got %dx%d - laying out for what we got\n",
+				render_info.ThisMode.w, render_info.ThisMode.h, got_w, got_h );
+
+			render_info.ThisMode.w = got_w;
+			render_info.ThisMode.h = got_h;
+		}
+	}
+
   #else
 	render_info.screen = SDL_SetVideoMode(
 		render_info.ThisMode.w,
