@@ -584,8 +584,13 @@ extern void network_cleanup( void );
 extern bool SeriousError;
 extern void CleanUpAndPostQuit(void);
 
+void crash_backtrace_init( void );
+
 int main( int argc, char* argv[] )
 {
+	/* Before anything else, so a crash during start-up is readable too. */
+	crash_backtrace_init();
+
 	int i;
 	char cli[500];
     int failcount = 0; // number of times RenderLoop has failed
