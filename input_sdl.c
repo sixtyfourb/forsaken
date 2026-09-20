@@ -449,6 +449,113 @@ static void menu_key_from_axis( int which, int axis, long value )
 		menu_key( now > 0 ? SDLK_DOWN : SDLK_UP );
 }
 
+
+/*
+ * Analog triggers, as buttons.
+ *
+ * L2 and R2 report as axes, and this engine binds actions to buttons: the
+ * control screen captures a button code, so a trigger can be assigned to a
+ * flight axis and to nothing else. Fire, which is what a trigger is for on a
+ * pad, cannot be put there at all.
+ *
+ * Each trigger therefore gets a button of its own, appended after the physical
+ * ones so it appears in the control screen under its own name and binds like
+ * anything else. MAX_JOYSTICK_BUTTONS is 128 and no pad comes close, so there
+ * is room.
+ */
+#define NUM_TRIGGERS 2
+
+static int  trigger_axis  [MAX_JOYSTICKS][NUM_TRIGGERS];
+static int  trigger_button[MAX_JOYSTICKS][NUM_TRIGGERS];
+static bool trigger_down  [MAX_JOYSTICKS][NUM_TRIGGERS];
+
+static const char * trigger_name[NUM_TRIGGERS] = { "Left Trigger", "Right Trigger" };
+
+/*
+ * Which axes are the triggers. SDL's controller database knows, so ask it
+ * rather than guess; the mapping string names them as "lefttrigger:aN". For a
+ * pad it has never heard of, fall back to what physically distinguishes a
+ * trigger: a stick rests centred and a trigger rests hard over.
+ */
+static void find_trigger_axes( int which, SDL_Joystick * joy, int device_index )
+{
+	int t;
+
+	for ( t = 0; t < NUM_TRIGGERS; t++ )
+	{
+		trigger_axis[which][t]   = -1;
+		trigger_button[which][t] = -1;
+		trigger_down[which][t]   = false;
+	}
+
+#if SDL_VERSION_ATLEAST(2,0,0)
+	{
+		char * map = SDL_GameControllerMappingForDeviceIndex( device_index );
+
+		if ( map )
+		{
+			static const char * key[NUM_TRIGGERS] =
+				{ "lefttrigger:a", "righttrigger:a" };
+
+			for ( t = 0; t < NUM_TRIGGERS; t++ )
+			{
+				const char * at = strstr( map, key[t] );
+
+				if ( at )
+					trigger_axis[which][t] = atoi( at + strlen( key[t] ) );
+			}
+
+			SDL_free( map );
+		}
+	}
+#else
+	(void) device_index;
+#endif
+
+	/* Nothing in the database: take the axes that rest hard negative. */
+	if ( trigger_axis[which][0] < 0 && trigger_axis[which][1] < 0 && joy )
+	{
+		int axis, found = 0;
+
+		for ( axis = 0; axis < SDL_JoystickNumAxes( joy ) && found < NUM_TRIGGERS; axis++ )
+		{
+			if ( SDL_JoystickGetAxis( joy, axis ) < -30000 )
+				trigger_axis[which][found++] = axis;
+		}
+	}
+}
+
+/*
+ * A trigger crossing half its travel is a press, and it has to fall well back
+ * before it counts as released - otherwise a finger resting on the edge of the
+ * threshold sends a stream of presses. Values here are the engine's own -100 to
+ * 100, so a trigger rests at -100 and bottoms out at 100.
+ */
+static void trigger_as_button( int which, int axis, long value )
+{
+	int t;
+
+	for ( t = 0; t < NUM_TRIGGERS; t++ )
+	{
+		int button = trigger_button[which][t];
+
+		if ( trigger_axis[which][t] != axis || button < 0 )
+			continue;
+
+		if ( !trigger_down[which][t] && value > 0 )
+		{
+			trigger_down[which][t] = true;
+			joy_button_state[which][button] = true;
+			input_buffer_send( button + DIK_JOYSTICK );
+		}
+		else if ( trigger_down[which][t] && value < -30 )
+		{
+			trigger_down[which][t] = false;
+			joy_button_state[which][button] = false;
+		}
+	}
+}
+
 void app_joy_axis( SDL_JoyAxisEvent * axis )
 {
 	long value;
@@ -476,6 +583,8 @@ void app_joy_axis( SDL_JoyAxisEvent * axis )
 
 	menu_key_from_axis( axis->which, axis->axis,
 		joy_axis_state[ axis->which ][ axis->axis ] );
+
+	trigger_as_button( axis->which, axis->axis, value );
 }
 
 void app_joy_ball( SDL_JoyBallEvent * ball )
@@ -646,6 +755,30 @@ bool joysticks_init(void)
 		JoystickInfo[i].NumButtons	= SDL_JoystickNumButtons(joy);
 		JoystickInfo[i].NumPOVs		= SDL_JoystickNumHats(joy);
 
+		/*
+		 * Give each analog trigger a button after the physical ones, so the
+		 * control screen lists it and fire can be bound to it.
+		 */
+		find_trigger_axes( i, joy, i );
+		{
+			int t;
+
+			for ( t = 0; t < NUM_TRIGGERS; t++ )
+			{
+				if ( trigger_axis[i][t] < 0 )
+					continue;
+				if ( JoystickInfo[i].NumButtons >= MAX_JOYSTICK_BUTTONS )
+					break;
+
+				trigger_button[i][t] = JoystickInfo[i].NumButtons++;
+
+				DebugPrintf(
+					"joysticks_init: joystick (%d), axis %d is the %s - button %d\n",
+					i, trigger_axis[i][t], trigger_name[t], trigger_button[i][t]
+				);
+			}
+		}
+
 		// TODO
 		// JoystickInfo[i].NumBalls = SDL_JoystickNumBalls(joy);
 
@@ -682,11 +815,22 @@ bool joysticks_init(void)
 			JoystickInfo[i].Button[j].name = 
 				(char *) malloc (MAX_JOYNAME+1);
 
-			sprintf(
-				JoystickInfo[i].Button[j].name,
-				"Button %d", 
-				j
-			);
+			if ( j == trigger_button[i][0] || j == trigger_button[i][1] )
+			{
+				snprintf(
+					JoystickInfo[i].Button[j].name, MAX_JOYNAME,
+					"%s",
+					trigger_name[ j == trigger_button[i][1] ? 1 : 0 ]
+				);
+			}
+			else
+			{
+				sprintf(
+					JoystickInfo[i].Button[j].name,
+					"Button %d", 
+					j
+				);
+			}
 		}
 
 		for (j = 0; j < JoystickInfo[i].NumPOVs; j++)
