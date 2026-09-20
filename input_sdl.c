@@ -507,6 +507,14 @@ void app_joy_button( SDL_JoyButtonEvent * button )
 			menu_key( SDLK_RETURN );
 		else if ( button->button == 1 )
 			menu_key( SDLK_ESCAPE );
+
+		/*
+		 * Start always sends Escape, menu or not. In flight it is the only way
+		 * back out on a pad: the menus are reached with Escape, and a handheld
+		 * has no key to press.
+		 */
+		if ( button->button == 7 || button->button == 6 )
+			input_buffer_send( SDLK_ESCAPE );
 	}
 }
 
